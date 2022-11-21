@@ -6,3 +6,18 @@
 #      bootstrap-servers: localhost:9090
 #      key-serializer: org.apache.kafka.common.serialization.StringSerializer
 #  value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+#db related settings
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tgbot
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+
+
+
