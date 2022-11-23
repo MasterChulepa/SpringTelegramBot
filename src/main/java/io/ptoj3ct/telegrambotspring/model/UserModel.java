@@ -9,7 +9,7 @@ import java.sql.Timestamp;
 
 @Entity(name = "usersData")
 @Data
-public class User {
+public class UserModel {
     @Id
     private Long id;
 

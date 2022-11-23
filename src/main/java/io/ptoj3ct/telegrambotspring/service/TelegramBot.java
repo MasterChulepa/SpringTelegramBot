@@ -1,8 +1,9 @@
 package io.ptoj3ct.telegrambotspring.service;
 
+import com.vdurmont.emoji.EmojiParser;
 import io.ptoj3ct.telegrambotspring.config.BotConfig;
 import io.ptoj3ct.telegrambotspring.data.UserRepository;
-import io.ptoj3ct.telegrambotspring.model.User;
+import io.ptoj3ct.telegrambotspring.dto.UserDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,8 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.sql.Timestamp;
@@ -24,11 +27,13 @@ import java.util.List;
 @Component
 public class TelegramBot extends TelegramLongPollingBot {
     private final UserRepository userRepository;
+    private final Producer kafkaProducer;
     private final BotConfig botConfig;
     public static String HELP_TEXT = "HELP_TEXT";
     @Autowired
-    public TelegramBot(BotConfig botConfig, UserRepository userRepository) {
+    public TelegramBot(BotConfig botConfig, UserRepository userRepository, Producer kafkaProducer) {
         this.botConfig = botConfig;
+        this.kafkaProducer = kafkaProducer;
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "start dialog with bot"));
         listOfCommands.add(new BotCommand("/createorder", "create a new order"));
@@ -75,7 +80,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void startCommandReceived(Message msg, long chatId) {
         String username = msg.getChat().getFirstName();
-        String answer = "Hello, " + username + ", nice to meet you!";
+        String answer = EmojiParser.parseToUnicode("Hello, " + username + ", nice to meet you! " + ":smile:");
         sendMessage(answer, chatId);
         log.info("Replied to user: " + username);
         registerUser(msg);
@@ -85,6 +90,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
+        message.setReplyMarkup(createReplyKeyboard());
         try {
             this.execute(message);
         } catch (TelegramApiException e) {
@@ -93,21 +99,35 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void registerUser(Message msg){
-        if(!userRepository.findById(msg.getChatId()).isPresent()){
             Chat chat = msg.getChat();
-            User user = new User();
+            UserDto user = new UserDto();
             user.setId(msg.getChatId());
             user.setUsername(chat.getUserName());
             user.setFirstName(chat.getFirstName());
             user.setLastName(chat.getLastName());
             user.setRegisteredAt(new Timestamp(System.currentTimeMillis()));
-            userRepository.save(user);
+            kafkaProducer.sendMessage(user);
             log.info("New user was registered: " + chat.getUserName());
-        }
     }
 
     private void someFunctionality(long chatId) {
         String text = "Sorry, command was not recognised";
         sendMessage(text, chatId);
+    }
+
+    private ReplyKeyboardMarkup createReplyKeyboard(){
+         ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
+         List<KeyboardRow> keyboardRows = new ArrayList<>();
+         KeyboardRow row = new KeyboardRow();
+         row.add("/start");
+         row.add("/help");
+         keyboardRows.add(row);
+         row = new KeyboardRow();
+         row.add("/createorder");
+         row.add("/option1");
+         row.add("/deletedata");
+         keyboardRows.add(row);
+         replyKeyboardMarkup.setKeyboard(keyboardRows);
+         return replyKeyboardMarkup;
     }
 }
